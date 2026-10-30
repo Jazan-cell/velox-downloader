@@ -17,6 +17,8 @@ jobs:
         run: git config --global --add safe.directory /__w/velox-downloader/velox-downloader
 
       - name: Build with Buildozer
+        env:
+          BUILDOZER_ALLOW_ROOT: "1"
         run: buildozer -v android debug
 
       - name: Upload APK Artifact
