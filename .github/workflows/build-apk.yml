@@ -7,19 +7,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: kivy/buildozer:latest
+    container: kivy/buildozer:master
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fix Git Safe Directory
-        run: git config --global --add safe.directory "*"
+      - name: Fix Safe Directory & Permissions
+        run: |
+          git config --global --add safe.directory "*"
+          mkdir -p .buildozer
 
       - name: Build with Buildozer
         env:
           BUILDOZER_WARN_ON_ROOT: "0"
-        run: yes | buildozer -v android debug
+        run: buildozer -v android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
