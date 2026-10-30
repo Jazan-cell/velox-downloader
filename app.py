@@ -122,8 +122,7 @@ def scan_media():
                         })
 
             # Sort video resolutions descending
-            video_options = sorted(video_optionspx if isinstance(video_options, list) else [], key=lambda x: x['height'], reverse=True)
-            # Normalize display keys
+            video_options = sorted(video_options if isinstance(video_options, list) else [], key=lambda x: x['height'], reverse=True)
             formatted_videos = []
             for v in video_options:
                 formatted_videos.append({
@@ -166,7 +165,7 @@ def start_download():
     data = request.get_json() or {}
     url = data.get('url')
     format_id = data.get('format_id')
-    file_type = data.get('type', 'video') # video or audio
+    file_type = data.get('type', 'video')
     job_id = str(uuid.uuid4())
 
     if not url:
@@ -212,7 +211,6 @@ def start_download():
                     filename = os.path.splitext(filename)[0] + '.mp4'
 
                 if not os.path.exists(filename):
-                    # Fallback check directory
                     for f in os.listdir(TEMP_DIR):
                         if f.startswith(job_id):
                             filename = os.path.join(TEMP_DIR, f)
@@ -253,20 +251,18 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VELOX — Ultimate Media Downloader</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-obsidian: #050505;
-            --surface-dark: #0a0a0c;
-            --surface-card: #121216;
+            --bg-obsidian: #030304;
+            --surface-dark: #0a0a0d;
+            --surface-card: #111116;
             --gold-primary: #ffd700;
-            --gold-bright: #ffea75;
-            --accent-orange: #ff8c00;
-            --accent-highlight: #ffcc00;
+            --gold-bright: #fff099;
+            --accent-orange: #ff6b00;
             --text-main: #ffffff;
-            --text-muted: #94a3b8;
-            --border-glow: rgba(255, 215, 0, 0.4);
+            --text-muted: #8e9bb0;
         }
 
         * {
@@ -284,7 +280,61 @@ HTML_TEMPLATE = """
             position: relative;
         }
 
-        /* Cinematic Background Atmosphere */
+        /* 1.5s CINEMATIC LIQUID GLOW INTRO OVERLAY */
+        #intro-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #020202;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: introFadeOut 0.4s ease 1.5s forwards;
+            pointer-events: none;
+        }
+
+        .intro-logo-box {
+            position: relative;
+            text-align: center;
+        }
+
+        .intro-title {
+            font-size: 52px;
+            font-weight: 900;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #ffffff 10%, var(--gold-primary) 50%, var(--accent-orange) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.8));
+            animation: introPulse 1.2s ease-in-out infinite alternate;
+        }
+
+        .intro-subtitle {
+            font-size: 13px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--gold-bright);
+            margin-top: 10px;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.9), 0 0 30px rgba(255, 107, 0, 0.6);
+        }
+
+        @keyframes introPulse {
+            0% { transform: scale(0.96); filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.5)); }
+            100% { transform: scale(1.04); filter: drop-shadow(0 0 35px rgba(255, 215, 0, 1)); }
+        }
+
+        @keyframes introFadeOut {
+            0% { opacity: 1; visibility: visible; }
+            100% { opacity: 0; visibility: hidden; }
+        }
+
+        /* Cinematic Atmosphere Background */
         .ambient-bg {
             position: fixed;
             top: 0;
@@ -292,8 +342,8 @@ HTML_TEMPLATE = """
             width: 100vw;
             height: 100vh;
             z-index: -1;
-            background: radial-gradient(circle at 50% 20%, rgba(255, 140, 0, 0.08) 0%, rgba(5, 5, 5, 1) 70%),
-                        radial-gradient(circle at 80% 80%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+            background: radial-gradient(circle at 50% 15%, rgba(255, 107, 0, 0.12) 0%, rgba(3, 3, 4, 1) 75%),
+                        radial-gradient(circle at 85% 85%, rgba(255, 215, 0, 0.08) 0%, transparent 60%);
             pointer-events: none;
         }
 
@@ -301,21 +351,21 @@ HTML_TEMPLATE = """
             position: absolute;
             width: 100%;
             height: 100%;
-            background-image: radial-gradient(rgba(255, 215, 0, 0.15) 1px, transparent 1px);
-            background-size: 50px 50px;
-            opacity: 0.3;
-            animation: drift 40s linear infinite;
+            background-image: radial-gradient(rgba(255, 215, 0, 0.18) 1px, transparent 1px);
+            background-size: 45px 45px;
+            opacity: 0.35;
+            animation: drift 35s linear infinite;
         }
 
         @keyframes drift {
             0% { background-position: 0 0; }
-            100% { background-position: 100px 100px; }
+            100% { background-position: 90px 90px; }
         }
 
-        /* Layout */
+        /* Header */
         header {
             text-align: center;
-            padding: 40px 20px 20px;
+            padding: 45px 20px 20px;
         }
 
         .brand-logo {
@@ -326,16 +376,16 @@ HTML_TEMPLATE = """
         }
 
         .brand-logo i {
-            font-size: 28px;
+            font-size: 32px;
             color: var(--gold-primary);
-            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.6));
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8));
         }
 
         h1 {
-            font-size: 32px;
-            font-weight: 800;
-            letter-spacing: 2px;
-            background: linear-gradient(135deg, #fff 30%, var(--gold-primary) 100%);
+            font-size: 36px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #fff 20%, var(--gold-primary) 60%, var(--accent-orange) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-transform: uppercase;
@@ -343,10 +393,10 @@ HTML_TEMPLATE = """
 
         .tagline {
             color: var(--text-muted);
-            font-size: 14px;
-            letter-spacing: 1px;
+            font-size: 13px;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            font-weight: 500;
+            font-weight: 600;
         }
 
         .container {
@@ -355,19 +405,31 @@ HTML_TEMPLATE = """
             padding: 0 20px;
         }
 
-        /* Animated Neon Border Container */
-        .neon-box {
+        /* MASTERPIECE LIQUID NEON BORDER CONTAINER */
+        .liquid-neon-box {
             position: relative;
-            border-radius: 24px;
+            border-radius: 26px;
             padding: 3px;
-            background: linear-gradient(60deg, var(--gold-primary), var(--accent-orange), var(--gold-bright), #332200);
-            background-size: 300% 300%;
-            animation: borderGlow 6s ease infinite;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 140, 0, 0.2);
+            background: linear-gradient(120deg, #ffd700, #ff6b00, #fff099, #111116, #ff8c00, #ffd700);
+            background-size: 400% 400%;
+            animation: liquidFlow 7s ease infinite;
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.35), 0 0 50px rgba(255, 107, 0, 0.25), inset 0 0 15px rgba(255, 215, 0, 0.2);
             margin-bottom: 30px;
         }
 
-        @keyframes borderGlow {
+        .liquid-neon-box::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            background: inherit;
+            border-radius: 28px;
+            filter: blur(12px);
+            opacity: 0.7;
+            z-index: -1;
+            animation: liquidFlow 7s ease infinite;
+        }
+
+        @keyframes liquidFlow {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
@@ -375,9 +437,9 @@ HTML_TEMPLATE = """
 
         .card-inner {
             background: var(--surface-card);
-            border-radius: 22px;
+            border-radius: 23px;
             padding: 35px 30px;
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(16px);
         }
 
         /* URL Input Section */
@@ -402,7 +464,7 @@ HTML_TEMPLATE = """
         input[type="text"] {
             width: 100%;
             background: var(--surface-dark);
-            border: 2px solid rgba(255, 215, 0, 0.2);
+            border: 2px solid rgba(255, 215, 0, 0.25);
             border-radius: 14px;
             padding: 16px 50px 16px 50px;
             color: var(--text-main);
@@ -413,7 +475,7 @@ HTML_TEMPLATE = """
 
         input[type="text"]:focus {
             border-color: var(--gold-primary);
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 10px rgba(255, 215, 0, 0.1);
         }
 
         .input-actions {
@@ -447,11 +509,11 @@ HTML_TEMPLATE = """
             padding: 18px;
             border-radius: 14px;
             font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 1px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
             cursor: pointer;
             text-transform: uppercase;
-            box-shadow: 0 8px 25px rgba(255, 140, 0, 0.4);
+            box-shadow: 0 8px 25px rgba(255, 107, 0, 0.4), 0 0 15px rgba(255, 215, 0, 0.3);
             transition: transform 0.2s, box-shadow 0.2s;
             position: relative;
             overflow: hidden;
@@ -459,14 +521,14 @@ HTML_TEMPLATE = """
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(255, 215, 0, 0.6);
+            box-shadow: 0 12px 35px rgba(255, 215, 0, 0.7), 0 0 20px rgba(255, 107, 0, 0.5);
         }
 
         .btn-primary:active {
             transform: translateY(1px);
         }
 
-        /* States & Panels */
+        /* Panels */
         .panel {
             display: none;
             animation: fadeIn 0.4s ease forwards;
@@ -490,12 +552,12 @@ HTML_TEMPLATE = """
         .spinner {
             width: 60px;
             height: 60px;
-            border: 4px solid rgba(255, 215, 0, 0.1);
+            border: 4px solid rgba(255, 215, 0, 0.15);
             border-top: 4px solid var(--gold-primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
         }
 
         @keyframes spin {
@@ -519,7 +581,8 @@ HTML_TEMPLATE = """
             border-radius: 14px;
             margin-bottom: 25px;
             align-items: center;
-            border: 1px solid rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            box-shadow: inset 0 0 10px rgba(255, 215, 0, 0.05);
         }
 
         .media-thumbnail {
@@ -554,7 +617,7 @@ HTML_TEMPLATE = """
             letter-spacing: 1px;
             color: var(--gold-primary);
             margin: 20px 0 10px;
-            font-weight: 700;
+            font-weight: 800;
         }
 
         .quality-grid {
@@ -566,11 +629,11 @@ HTML_TEMPLATE = """
 
         .quality-card {
             background: var(--surface-dark);
-            border: 2px solid rgba(255, 215, 0, 0.15);
+            border: 2px solid rgba(255, 215, 0, 0.18);
             padding: 12px 15px;
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -578,17 +641,18 @@ HTML_TEMPLATE = """
 
         .quality-card:hover {
             border-color: var(--gold-primary);
-            background: rgba(255, 215, 0, 0.05);
+            background: rgba(255, 215, 0, 0.08);
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
         }
 
         .quality-card.selected {
             border-color: var(--gold-primary);
-            background: rgba(255, 215, 0, 0.12);
-            box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+            background: rgba(255, 215, 0, 0.15);
+            box-shadow: 0 0 18px rgba(255, 215, 0, 0.4);
         }
 
         .quality-card .q-name {
-            font-weight: 600;
+            font-weight: 700;
             font-size: 14px;
         }
 
@@ -610,7 +674,7 @@ HTML_TEMPLATE = """
             border-radius: 5px;
             overflow: hidden;
             margin: 20px 0;
-            border: 1px solid rgba(255, 215, 0, 0.2);
+            border: 1px solid rgba(255, 215, 0, 0.25);
         }
 
         .progress-bar-fill {
@@ -618,7 +682,7 @@ HTML_TEMPLATE = """
             background: linear-gradient(90deg, var(--accent-orange), var(--gold-primary));
             width: 0%;
             transition: width 0.3s ease;
-            box-shadow: 0 0 10px var(--gold-primary);
+            box-shadow: 0 0 12px var(--gold-primary);
         }
 
         /* Error Box */
@@ -647,7 +711,7 @@ HTML_TEMPLATE = """
             padding: 12px 20px;
             border-radius: 10px;
             margin-top: 10px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 5px 25px rgba(0,0,0,0.7), 0 0 10px rgba(255, 215, 0, 0.3);
             font-size: 14px;
             animation: slideIn 0.3s ease;
         }
@@ -657,24 +721,48 @@ HTML_TEMPLATE = """
             to { transform: translateX(0); opacity: 1; }
         }
 
+        /* LIVELY GLOW FOOTER BRANDING */
         footer {
             text-align: center;
             color: var(--text-muted);
-            font-size: 12px;
-            padding: 20px;
-            letter-spacing: 1px;
+            font-size: 13px;
+            padding: 25px;
+            letter-spacing: 2px;
             text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .footer-branding {
+            background: linear-gradient(135deg, var(--gold-bright), var(--accent-orange));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+            animation: glowPulse 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glowPulse {
+            0% { filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.4)); }
+            100% { filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)); }
         }
 
         @media(max-width: 480px) {
             .quality-grid {
                 grid-template-columns: 1fr;
             }
-            h1 { font-size: 26px; }
+            h1 { font-size: 28px; }
+            .intro-title { font-size: 38px; }
         }
     </style>
 </head>
 <body>
+
+    <!-- 1.5-SECOND CINEMATIC INTRO OVERLAY -->
+    <div id="intro-overlay">
+        <div class="intro-logo-box">
+            <div class="intro-title">VELOX</div>
+            <div class="intro-subtitle">ENGINEERED BY JAZAN</div>
+        </div>
+    </div>
 
     <div class="ambient-bg">
         <div class="particles"></div>
@@ -689,7 +777,8 @@ HTML_TEMPLATE = """
     </header>
 
     <div class="container">
-        <div class="neon-box">
+        <!-- LIQUID NEON GLOW CONTAINER -->
+        <div class="liquid-neon-box">
             <div class="card-inner">
                 
                 <!-- IDLE / URL INPUT PANEL -->
@@ -769,7 +858,7 @@ HTML_TEMPLATE = """
     </div>
 
     <footer>
-        Engineered by Jazan &bull; Velox v3.0
+        <span class="footer-branding">Engineered by Jazan</span> &bull; Velox v3.0
     </footer>
 
     <div id="toast-container"></div>
@@ -948,7 +1037,6 @@ HTML_TEMPLATE = """
                         document.getElementById('progress-percentage').innerText = '100%';
                         showToast('Download complete! Starting file download...');
                         
-                        // Trigger file download
                         window.location.href = `/api/file/${jobId}`;
                         
                         setTimeout(() => {
