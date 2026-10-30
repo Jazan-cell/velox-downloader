@@ -1,13 +1,17 @@
-name: Build Velox Downloader APK
+name: VELOX Downloader APK Build
 
 on:
 push:
-branches: [ main ]
+branches:
+- main
+workflow_dispatch:
 
 jobs:
 build:
 runs-on: ubuntu-latest
-container: kivy/buildozer:latest
+
+container:
+  image: kivy/buildozer:latest
 
 env:
   BUILDOZER_WARN_ON_ROOT: "0"
@@ -17,23 +21,20 @@ steps:
   - name: Checkout Repository
     uses: actions/checkout@v4
 
-  - name: Fix Safe Directory & Permissions
+  - name: Prepare Build Environment
     run: |
       git config --global --add safe.directory "*"
-      mkdir -p .buildozer
-
-  - name: Check Build Environment
-    run: |
+      mkdir -p .buildozer bin
       python3 --version
       buildozer --version
 
-  - name: Build APK
+  - name: Build VELOX APK
     run: buildozer -v android debug
 
-  - name: Upload APK Artifact
+  - name: Upload APK
     uses: actions/upload-artifact@v4
     if: success()
     with:
-      name: Velox-Downloader-APK
+      name: VELOX-Downloader-APK
       path: bin/*.apk
       if-no-files-found: error
