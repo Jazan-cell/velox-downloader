@@ -1,391 +1,45 @@
 import os
-import re
-from flask import Flask, render_template_string, request, jsonify
+import uuid
+import time
+import shutil
+import threading
+from flask import Flask, render_template_string, request, jsonify, send_file
 import yt_dlp
 
 app = Flask(__name__)
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VELOX — Cinematic Media Downloader</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-obsidian: #050608;
-            --card-glass: rgba(12, 14, 20, 0.85);
-            --gold-accent: #f1c40f;
-            --gold-bright: #ffea79;
-            --gold-gradient: linear-gradient(135deg, #f39c12, #f1c40f, #ffe600);
-            --text-main: #f4f5f7;
-            --text-muted: #8e92a4;
-        }
+# Temporary download directory
+TEMP_DIR = os.path.join(os.getcwd(), 'temp_downloads')
+os.makedirs(TEMP_DIR, exist_ok=True)
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+# Active download progress store for real-time tracking
+download_progress = {}
 
-        body {
-            background-color: var(--bg-obsidian);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            overflow: hidden;
-            background-image: 
-                radial-gradient(circle at 50% -20%, rgba(241, 196, 15, 0.15), transparent 60%),
-                radial-gradient(circle at 50% 120%, rgba(243, 156, 18, 0.08), transparent 50%);
-        }
+def cleanup_old_files():
+    """Background cleanup for temporary files older than 30 minutes."""
+    while True:
+        try:
+            now = time.time()
+            if os.path.exists(TEMP_DIR):
+                for f in os.listdir(TEMP_DIR):
+                    file_path = os.path.join(TEMP_DIR, f)
+                    if os.path.isfile(file_path) and (now - os.path.getmtime(file_path)) > 1800:
+                        try:
+                            os.remove(file_path)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        time.sleep(600)
 
-        /* Cinematic Intro Overlay */
-        #intro-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #030406;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            animation: fadeOutIntro 0.5s ease-in-out 1.5s forwards;
-        }
+threading.Thread(target=cleanup_old_files, daemon=True).start()
 
-        @keyframes fadeOutIntro {
-            0% { opacity: 1; visibility: visible; }
-            100% { opacity: 0; visibility: hidden; }
-        }
-
-        .intro-logo {
-            font-size: 3.5rem;
-            font-weight: 700;
-            background: var(--gold-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-            animation: introZoom 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        .intro-sub {
-            color: var(--gold-accent);
-            font-size: 0.9rem;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            margin-top: 10px;
-            opacity: 0.8;
-            animation: introZoom 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        @keyframes introZoom {
-            0% { transform: scale(0.9); opacity: 0; filter: blur(10px); }
-            50% { transform: scale(1); opacity: 1; filter: blur(0); }
-            100% { transform: scale(1.05); opacity: 1; filter: blur(0); }
-        }
-
-        /* After Effects Saber Neon Glow Effect */
-        @keyframes saberGlow {
-            0% {
-                border-color: rgba(241, 196, 15, 0.6);
-                box-shadow: 0 0 10px rgba(241, 196, 15, 0.3), 
-                            0 0 25px rgba(243, 156, 18, 0.3), 
-                            inset 0 0 12px rgba(241, 196, 15, 0.2);
-            }
-            50% {
-                border-color: rgba(255, 234, 121, 1);
-                box-shadow: 0 0 20px rgba(241, 196, 15, 0.7), 
-                            0 0 45px rgba(243, 156, 18, 0.8), 
-                            0 0 70px rgba(241, 196, 15, 0.5), 
-                            inset 0 0 22px rgba(255, 234, 121, 0.5);
-            }
-            100% {
-                border-color: rgba(241, 196, 15, 0.6);
-                box-shadow: 0 0 10px rgba(241, 196, 15, 0.3), 
-                            0 0 25px rgba(243, 156, 18, 0.3), 
-                            inset 0 0 12px rgba(241, 196, 15, 0.2);
-            }
-        }
-
-        .container {
-            width: 100%;
-            max-width: 620px;
-            background: var(--card-glass);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
-            border: 2px solid rgba(241, 196, 15, 0.5);
-            border-radius: 30px;
-            padding: 40px 30px;
-            animation: saberGlow 3s infinite ease-in-out, containerEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            animation-delay: 1.5s;
-            opacity: 0;
-        }
-
-        @keyframes containerEntrance {
-            from { opacity: 0; transform: translateY(30px) scale(0.97); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .logo-title {
-            font-size: 2.6rem;
-            font-weight: 700;
-            background: var(--gold-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: 3px;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-
-        .subtitle {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            letter-spacing: 0.5px;
-        }
-
-        .input-group {
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .url-input {
-            width: 100%;
-            padding: 18px 20px;
-            background: rgba(5, 6, 8, 0.9);
-            border: 1.5px solid rgba(241, 196, 15, 0.3);
-            border-radius: 16px;
-            color: #fff;
-            font-size: 1rem;
-            outline: none;
-        }
-
-        .url-input:focus {
-            border-color: var(--gold-bright);
-            box-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
-        }
-
-        .btn-submit {
-            width: 100%;
-            padding: 16px;
-            background: var(--gold-gradient);
-            border: none;
-            border-radius: 16px;
-            color: #050608;
-            font-weight: 700;
-            font-size: 1.05rem;
-            cursor: pointer;
-            box-shadow: 0 8px 25px rgba(241, 196, 15, 0.3);
-        }
-
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 35px rgba(241, 196, 15, 0.5);
-        }
-
-        /* Result & Quality Selector Area */
-        #result-area {
-            margin-top: 25px;
-            display: none;
-            max-height: 380px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: rgba(241, 196, 15, 0.3); border-radius: 10px; }
-
-        .media-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(241, 196, 15, 0.25);
-            border-radius: 18px;
-            padding: 20px;
-        }
-
-        .media-title {
-            font-size: 1rem;
-            margin-bottom: 15px;
-            color: #fff;
-            font-weight: 600;
-            line-height: 1.4;
-        }
-
-        .quality-section-title {
-            font-size: 0.85rem;
-            color: var(--gold-accent);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 15px 0 8px 0;
-            font-weight: 700;
-        }
-
-        .quality-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-
-        .quality-btn {
-            padding: 12px 15px;
-            background: rgba(241, 196, 15, 0.08);
-            border: 1px solid rgba(241, 196, 15, 0.3);
-            color: var(--text-main);
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            text-align: center;
-            display: block;
-        }
-
-        .quality-btn:hover {
-            background: var(--gold-gradient);
-            color: #050608;
-            border-color: transparent;
-            box-shadow: 0 5px 20px rgba(241, 196, 15, 0.4);
-        }
-
-        .spinner {
-            display: none;
-            width: 32px;
-            height: 32px;
-            border: 3px solid rgba(241, 196, 15, 0.2);
-            border-top: 3px solid var(--gold-accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Cinematic Intro Screen -->
-    <div id="intro-screen">
-        <h1 class="intro-logo">VELOX</h1>
-        <p class="intro-sub">Engineered by Jazan</p>
-    </div>
-
-    <div class="container">
-        <div class="header">
-            <h1 class="logo-title">VELOX</h1>
-            <p class="subtitle">Ultimate Multi-Quality Media Downloader</p>
-        </div>
-
-        <div class="input-group">
-            <input type="text" id="urlInput" class="url-input" placeholder="Paste YouTube or Instagram link..." autocomplete="off">
-        </div>
-
-        <button id="fetchBtn" class="btn-submit" onclick="fetchMediaFormats()">Scan Qualities</button>
-
-        <div id="spinner" class="spinner"></div>
-
-        <div id="result-area"></div>
-    </div>
-
-    <script>
-        async function fetchMediaFormats() {
-            const urlInput = document.getElementById('urlInput').value.trim();
-            const resultArea = document.getElementById('result-area');
-            const spinner = document.getElementById('spinner');
-            const fetchBtn = document.getElementById('fetchBtn');
-
-            if (!urlInput) return;
-
-            resultArea.style.display = 'none';
-            spinner.style.display = 'block';
-            fetchBtn.style.opacity = '0.6';
-            fetchBtn.disabled = true;
-
-            try {
-                const response = await fetch('/extract', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: urlInput })
-                });
-
-                const data = await response.json();
-
-                spinner.style.display = 'none';
-                fetchBtn.style.opacity = '1';
-                fetchBtn.disabled = false;
-
-                if (data.error) {
-                    resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c; text-align: center;">${data.error}</p></div>`;
-                } else {
-                    let videoButtons = '';
-                    if (data.formats.video.length > 0) {
-                        videoButtons = `<div class="quality-section-title">Video Qualities</div><div class="quality-grid">`;
-                        data.formats.video.forEach(f => {
-                            videoButtons += `<a href="${f.url}" target="_blank" class="quality-btn" download>${f.resolution}</a>`;
-                        });
-                        videoButtons += `</div>`;
-                    }
-
-                    let audioButtons = '';
-                    if (data.formats.audio.length > 0) {
-                        audioButtons = `<div class="quality-section-title">Audio Streams</div><div class="quality-grid">`;
-                        data.formats.audio.forEach(f => {
-                            audioButtons += `<a href="${f.url}" target="_blank" class="quality-btn" download>${f.quality}</a>`;
-                        });
-                        audioButtons += `</div>`;
-                    }
-
-                    resultArea.innerHTML = `
-                        <div class="media-card">
-                            <h3 class="media-title">${data.title}</h3>
-                            ${videoButtons}
-                            ${audioButtons}
-                        </div>
-                    `;
-                }
-                resultArea.style.display = 'block';
-            } catch (err) {
-                spinner.style.display = 'none';
-                fetchBtn.style.opacity = '1';
-                fetchBtn.disabled = false;
-                resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c; text-align: center;">Scan failed. Check link or try again.</p></div>`;
-                resultArea.style.display = 'block';
-            }
-        }
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/')
-def home():
-    return render_template_string(HTML_TEMPLATE)
-
-@app.route('/extract', methods=['POST'])
-def extract_media():
-    data = request.get_json()
-    url = data.get('url')
-    
-    if not url:
-        return jsonify({'error': 'No URL provided'}), 400
-
-    ydl_opts = {
+def get_base_ydl_opts():
+    """Base yt-dlp options incorporating cookies.txt if present."""
+    opts = {
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 15,
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'web']
@@ -393,63 +47,935 @@ def extract_media():
         },
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9',
         }
     }
+    if os.path.exists('cookies.txt'):
+        opts['cookiefile'] = 'cookies.txt'
+    return opts
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/scan', methods=['POST'])
+def scan_media():
+    data = request.get_json() or {}
+    url = data.get('url', '').strip()
+
+    if not url:
+        return jsonify({'error': 'Please enter a valid media URL.'}), 400
+
+    if not any(domain in url.lower() for domain in ['youtube.com', 'youtu.be', 'instagram.com']):
+        return jsonify({'error': 'Only YouTube and Instagram URLs are supported.'}), 400
+
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts['extract_flat'] = False
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            title = info.get('title', 'Media File')
-            raw_formats = info.get('formats', [])
-            
-            video_qualities = []
-            audio_qualities = []
+            if not info:
+                return jsonify({'error': 'Could not extract media information.'}), 400
+
+            title = info.get('title', 'Unknown Title')
+            duration = info.get('duration', 0)
+            thumbnail = info.get('thumbnail', '')
+            uploader = info.get('uploader', info.get('channel', 'Unknown Creator'))
+            platform = 'Instagram' if 'instagram.com' in url.lower() else 'YouTube'
+
+            formats = info.get('formats', [])
+            video_options = []
+            audio_options = []
             seen_res = set()
-            seen_audio = set()
 
-            for f in raw_formats:
-                f_url = f.get('url')
-                if not f_url:
-                    continue
-                
-                # Filter Video Formats (4K, 1080p, 720p, 480p, 360p)
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                    height = f.get('height')
-                    if height and height >= 360:
-                        if height >= 2160: res_label = "4K Ultra HD"
-                        elif height >= 1440: res_label = "1440p (2K)"
-                        elif height >= 1080: res_label = "1080p Full HD"
-                        elif height >= 720: res_label = "720p HD"
-                        elif height >= 480: res_label = "480p"
-                        else: res_label = "360p"
-                        
-                        if res_label not in seen_res:
-                            seen_res.add(res_label)
-                            video_qualities.append({'resolution': res_label, 'url': f_url})
+            for f in formats:
+                vcodec = f.get('vcodec', 'none')
+                acodec = f.get('acodec', 'none')
+                height = f.get('height')
+                ext = f.get('ext')
+                format_id = f.get('format_id')
 
-                # Filter Audio Streams (320kbps, 128kbps, etc.)
-                elif f.get('vcodec') == 'none' and f.get('acodec') != 'none':
-                    abr = f.get('abr', 0)
-                    if abr:
-                        audio_label = f"{int(abr)} kbps Audio"
-                        if audio_label not in seen_audio:
-                            seen_audio.add(audio_label)
-                            audio_qualities.append({'quality': audio_label, 'url': f_url})
+                # Video streams (muxed or video-only)
+                if height and height >= 144 and vcodec != 'none':
+                    res_label = f"{height}p"
+                    if height >= 2160:
+                        res_label = "4K Ultra HD"
+                    elif height >= 1440:
+                        res_label = "1440p QHD"
+                    elif height >= 1080:
+                        res_label = "1080p Full HD"
+                    elif height >= 720:
+                        res_label = "720p HD"
+                    elif height >= 480:
+                        res_label = "480p"
+                    elif height >= 360:
+                        res_label = "360p"
 
-            # Sort video highest to lowest resolution approximation
-            video_qualities = sorted(video_qualities, key=lambda x: ('4K' in x['resolution'], '1440p' in x['resolution'], '1080p' in x['resolution'], '720p' in x['resolution']), reverse=True)
+                    if height not in seen_res:
+                        seen_res.add(height)
+                        video_options.append({
+                            'format_id': format_id,
+                            'resolution': res_label,
+                            'height': height,
+                            'ext': ext or 'mp4'
+                        })
+
+            # Sort video resolutions descending
+            video_options = sorted(video_optionspx if isinstance(video_options, list) else [], key=lambda x: x['height'], reverse=True)
+            # Normalize display keys
+            formatted_videos = []
+            for v in video_options:
+                formatted_videos.append({
+                    'format_id': v['format_id'],
+                    'quality': v['resolution'],
+                    'ext': 'mp4'
+                })
+
+            # Standard audio presets
+            audio_options = [
+                {'bitrate': '320 kbps', 'format_id': 'bestaudio'},
+                {'bitrate': '256 kbps', 'format_id': 'bestaudio'},
+                {'bitrate': '192 kbps', 'format_id': 'bestaudio'},
+                {'bitrate': '128 kbps', 'format_id': 'bestaudio'}
+            ]
+
+            job_id = str(uuid.uuid4())
 
             return jsonify({
+                'success': True,
+                'job_id': job_id,
                 'title': title,
-                'formats': {
-                    'video': video_qualities[:6],  # Top choices
-                    'audio': audio_qualities[:4]
-                }
+                'duration': duration,
+                'thumbnail': thumbnail,
+                'uploader': uploader,
+                'platform': platform,
+                'videos': formatted_videos if formatted_videos else [{'format_id': 'best', 'quality': 'Best Available', 'ext': 'mp4'}],
+                'audios': audio_options,
+                'original_url': url
             })
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        err_msg = str(e)
+        if 'Sign in' in err_msg or 'private' in err_msg.lower():
+            err_msg = 'Content is private, restricted, or requires authentication.'
+        return jsonify({'error': f'Extraction failed: {err_msg}'}), 400
+
+@app.route('/api/download', methods=['POST'])
+def start_download():
+    data = request.get_json() or {}
+    url = data.get('url')
+    format_id = data.get('format_id')
+    file_type = data.get('type', 'video') # video or audio
+    job_id = str(uuid.uuid4())
+
+    if not url:
+        return jsonify({'error': 'Missing URL'}), 400
+
+    def run_download():
+        try:
+            download_progress[job_id] = {'status': 'downloading', 'progress': 0, 'filename': None}
+            
+            def progress_hook(d):
+                if d['status'] == 'downloading':
+                    p_str = d.get('_percent_str', '0%').replace('%', '').strip()
+                    try:
+                        p_val = float(p_str)
+                    except ValueError:
+                        p_val = 0.0
+                    download_progress[job_id]['progress'] = p_val
+
+            ydl_opts = get_base_ydl_opts()
+            ydl_opts['progress_hooks'] = [progress_hook]
+            ydl_opts['outtmpl'] = os.path.join(TEMP_DIR, f'{job_id}_%(title)s.%(ext)s')
+
+            if file_type == 'audio':
+                ydl_opts['format'] = 'bestaudio/best'
+                ydl_opts['postprocessors'] = [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+            else:
+                if format_id == 'best':
+                    ydl_opts['format'] = 'bestvideo+bestaudio/best'
+                else:
+                    ydl_opts['format'] = f'{format_id}+bestaudio/best'
+                ydl_opts['merge_output_format'] = 'mp4'
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                if file_type == 'audio':
+                    filename = os.path.splitext(filename)[0] + '.mp3'
+                else:
+                    filename = os.path.splitext(filename)[0] + '.mp4'
+
+                if not os.path.exists(filename):
+                    # Fallback check directory
+                    for f in os.listdir(TEMP_DIR):
+                        if f.startswith(job_id):
+                            filename = os.path.join(TEMP_DIR, f)
+                            break
+
+                download_progress[job_id] = {'status': 'completed', 'progress': 100, 'filename': filename}
+
+        except Exception as e:
+            download_progress[job_id] = {'status': 'error', 'message': str(e)}
+
+    threading.Thread(target=run_download, daemon=True).start()
+    return jsonify({'success': True, 'job_id': job_id})
+
+@app.route('/api/progress/<job_id>', methods=['GET'])
+def get_progress(job_id):
+    prog = download_progress.get(job_id)
+    if not prog:
+        return jsonify({'status': 'not_found'}), 404
+    return jsonify(prog)
+
+@app.route('/api/file/<job_id>', methods=['GET'])
+def get_file(job_id):
+    prog = download_progress.get(job_id)
+    if not prog or prog.get('status') != 'completed':
+        return "File not ready or expired", 404
+
+    filepath = prog.get('filename')
+    if not filepath or not os.path.exists(filepath):
+        return "File not found on server", 404
+
+    return send_file(filepath, as_attachment=True)
+
+# ==================== HTML / CSS / JS FRONTEND ====================
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VELOX — Ultimate Media Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-obsidian: #050505;
+            --surface-dark: #0a0a0c;
+            --surface-card: #121216;
+            --gold-primary: #ffd700;
+            --gold-bright: #ffea75;
+            --accent-orange: #ff8c00;
+            --accent-highlight: #ffcc00;
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+            --border-glow: rgba(255, 215, 0, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-obsidian);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Cinematic Background Atmosphere */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 20%, rgba(255, 140, 0, 0.08) 0%, rgba(5, 5, 5, 1) 70%),
+                        radial-gradient(circle at 80% 80%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(rgba(255, 215, 0, 0.15) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.3;
+            animation: drift 40s linear infinite;
+        }
+
+        @keyframes drift {
+            0% { background-position: 0 0; }
+            100% { background-position: 100px 100px; }
+        }
+
+        /* Layout */
+        header {
+            text-align: center;
+            padding: 40px 20px 20px;
+        }
+
+        .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .brand-logo i {
+            font-size: 28px;
+            color: var(--gold-primary);
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.6));
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #fff 30%, var(--gold-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .tagline {
+            color: var(--text-muted);
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 20px auto 60px;
+            padding: 0 20px;
+        }
+
+        /* Animated Neon Border Container */
+        .neon-box {
+            position: relative;
+            border-radius: 24px;
+            padding: 3px;
+            background: linear-gradient(60deg, var(--gold-primary), var(--accent-orange), var(--gold-bright), #332200);
+            background-size: 300% 300%;
+            animation: borderGlow 6s ease infinite;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 140, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        @keyframes borderGlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .card-inner {
+            background: var(--surface-card);
+            border-radius: 22px;
+            padding: 35px 30px;
+            backdrop-filter: blur(12px);
+        }
+
+        /* URL Input Section */
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        .url-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .url-input-wrapper i.prefix-icon {
+            position: absolute;
+            left: 18px;
+            color: var(--gold-primary);
+            font-size: 18px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: var(--surface-dark);
+            border: 2px solid rgba(255, 215, 0, 0.2);
+            border-radius: 14px;
+            padding: 16px 50px 16px 50px;
+            color: var(--text-main);
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .input-actions {
+            position: absolute;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 6px;
+            border-radius: 8px;
+            transition: color 0.2s;
+        }
+
+        .icon-btn:hover {
+            color: var(--gold-primary);
+        }
+
+        /* Main Download Button */
+        .btn-primary {
+            width: 100%;
+            background: linear-gradient(135deg, var(--gold-primary), var(--accent-orange));
+            color: #000;
+            border: none;
+            padding: 18px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 8px 25px rgba(255, 140, 0, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(255, 215, 0, 0.6);
+        }
+
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+
+        /* States & Panels */
+        .panel {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Scanning State */
+        .scanning-box {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 215, 0, 0.1);
+            border-top: 4px solid var(--gold-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .scan-status {
+            color: var(--gold-bright);
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Results & Media Info */
+        .media-info {
+            display: flex;
+            gap: 15px;
+            background: var(--surface-dark);
+            padding: 15px;
+            border-radius: 14px;
+            margin-bottom: 25px;
+            align-items: center;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+        }
+
+        .media-thumbnail {
+            width: 100px;
+            height: 65px;
+            object-fit: cover;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        .media-details h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .media-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Quality Options Grid */
+        .section-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--gold-primary);
+            margin: 20px 0 10px;
+            font-weight: 700;
+        }
+
+        .quality-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .quality-card {
+            background: var(--surface-dark);
+            border: 2px solid rgba(255, 215, 0, 0.15);
+            padding: 12px 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .quality-card:hover {
+            border-color: var(--gold-primary);
+            background: rgba(255, 215, 0, 0.05);
+        }
+
+        .quality-card.selected {
+            border-color: var(--gold-primary);
+            background: rgba(255, 215, 0, 0.12);
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .quality-card .q-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .quality-card .q-type {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Progress State */
+        .progress-container {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 10px;
+            background: var(--surface-dark);
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-orange), var(--gold-primary));
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--gold-primary);
+        }
+
+        /* Error Box */
+        .error-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            padding: 20px;
+            border-radius: 14px;
+            text-align: center;
+            color: #f87171;
+            margin-bottom: 20px;
+        }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: var(--surface-card);
+            border: 1px solid var(--gold-primary);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin-top: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        footer {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 20px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        @media(max-width: 480px) {
+            .quality-grid {
+                grid-template-columns: 1fr;
+            }
+            h1 { font-size: 26px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg">
+        <div class="particles"></div>
+    </div>
+
+    <header>
+        <div class="brand-logo">
+            <i class="fa-solid fa-bolt-lightning"></i>
+            <h1>VELOX</h1>
+        </div>
+        <p class="tagline">Ultimate Multi-Quality Media Engine</p>
+    </header>
+
+    <div class="container">
+        <div class="neon-box">
+            <div class="card-inner">
+                
+                <!-- IDLE / URL INPUT PANEL -->
+                <div id="panel-input" class="panel active">
+                    <div class="input-group">
+                        <div class="url-input-wrapper">
+                            <i class="fa-solid fa-link prefix-icon"></i>
+                            <input type="text" id="url-input" placeholder="Paste YouTube or Instagram link here..." autocomplete="off">
+                            <div class="input-actions">
+                                <button class="icon-btn" id="paste-btn" title="Paste from clipboard"><i class="fa-solid fa-clipboard"></i></button>
+                                <button class="icon-btn" id="clear-btn" title="Clear URL"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-primary" id="scan-btn">Download Media</button>
+                </div>
+
+                <!-- SCANNING PANEL -->
+                <div id="panel-scanning" class="panel">
+                    <div class="scanning-box">
+                        <div class="spinner"></div>
+                        <div class="scan-status" id="scan-status-text">Analyzing media stream...</div>
+                    </div>
+                </div>
+
+                <!-- RESULTS / QUALITY SELECT PANEL -->
+                <div id="panel-results" class="panel">
+                    <div class="media-info">
+                        <img id="res-thumb" src="" alt="Thumbnail" class="media-thumbnail">
+                        <div class="media-details">
+                            <h3 id="res-title">Media Title</h3>
+                            <div class="media-meta">
+                                <span id="res-platform"><i class="fa-solid fa-globe"></i> YouTube</span>
+                                <span id="res-duration"><i class="fa-regular fa-clock"></i> 0:00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Video Quality Options</div>
+                    <div class="quality-grid" id="video-options-grid">
+                        <!-- Injected via JS -->
+                    </div>
+
+                    <div class="section-title">Audio Quality Options</div>
+                    <div class="quality-grid" id="audio-options-grid">
+                        <!-- Injected via JS -->
+                    </div>
+
+                    <button class="btn-primary" id="download-trigger-btn" style="margin-top: 10px;">Start Download</button>
+                </div>
+
+                <!-- DOWNLOADING PANEL -->
+                <div id="panel-downloading" class="panel">
+                    <div class="progress-container">
+                        <div class="spinner" style="width: 45px; height: 45px; border-width: 3px;"></div>
+                        <h3 style="margin-bottom: 10px; font-size: 18px;">Processing & Downloading...</h3>
+                        <p id="download-status-text" style="color: var(--text-muted); font-size: 13px;">Preparing streams and merging formats</p>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progress-fill"></div>
+                        </div>
+                        <span id="progress-percentage" style="font-weight: 700; color: var(--gold-primary);">0%</span>
+                    </div>
+                </div>
+
+                <!-- ERROR PANEL -->
+                <div id="panel-error" class="panel">
+                    <div class="error-box">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 28px; margin-bottom: 10px;"></i>
+                        <h3 style="margin-bottom: 5px;">Extraction Failed</h3>
+                        <p id="error-message-text" style="font-size: 13px; color: #fca5a5;">An unexpected error occurred while parsing media.</p>
+                    </div>
+                    <button class="btn-primary" id="retry-btn">Try Another Link</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        Engineered by Jazan &bull; Velox v3.0
+    </footer>
+
+    <div id="toast-container"></div>
+
+    <script>
+        let currentJobData = null;
+        let selectedFormat = { id: null, type: 'video' };
+
+        function showPanel(panelId) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(panelId).classList.add('active');
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // URL Actions
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            document.getElementById('url-input').value = '';
+        });
+
+        document.getElementById('paste-btn').addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('url-input').value = text;
+                showToast('URL pasted from clipboard');
+            } catch (err) {
+                showToast('Clipboard access denied');
+            }
+        });
+
+        // Scan Action
+        document.getElementById('scan-btn').addEventListener('click', async () => {
+            const url = document.getElementById('url-input').value.trim();
+            if (!url) {
+                showToast('Please paste a valid URL');
+                return;
+            }
+
+            showPanel('panel-scanning');
+            
+            const statuses = ["Connecting to media stream...", "Analyzing available formats...", "Detecting resolutions...", "Finalizing options..."];
+            let sIdx = 0;
+            const statusInterval = setInterval(() => {
+                sIdx = (sIdx + 1) % statuses.length;
+                document.getElementById('scan-status-text').innerText = statuses[sIdx];
+            }, 1000);
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+                clearInterval(statusInterval);
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to scan URL');
+                }
+
+                currentJobData = data;
+                renderResults(data);
+                showPanel('panel-results');
+
+            } catch (err) {
+                clearInterval(statusInterval);
+                document.getElementById('error-message-text').innerText = err.message;
+                showPanel('panel-error');
+            }
+        });
+
+        function renderResults(data) {
+            document.getElementById('res-title').innerText = data.title;
+            document.getElementById('res-thumb').src = data.thumbnail || 'https://via.placeholder.com/100x65?text=VELOX';
+            document.getElementById('res-platform').innerHTML = `<i class="fa-solid fa-globe"></i> ${data.platform}`;
+            
+            const mins = Math.floor(data.duration / 60);
+            const secs = data.duration % 60;
+            document.getElementById('res-duration').innerHTML = `<i class="fa-regular fa-clock"></i> ${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+            // Render Video Options
+            const vGrid = document.getElementById('video-options-grid');
+            vGrid.innerHTML = '';
+            if (data.videos && data.videos.length > 0) {
+                data.videos.forEach((v, idx) => {
+                    const card = document.createElement('div');
+                    card.className = `quality-card ${idx === 0 ? 'selected' : ''}`;
+                    card.innerHTML = `<div><div class="q-name">${v.quality}</div><div class="q-type">MP4 Video</div></div><i class="fa-solid fa-circle-check" style="color: ${idx === 0 ? 'var(--gold-primary)' : 'transparent'};"></i>`;
+                    
+                    if (idx === 0) {
+                        selectedFormat = { id: v.format_id, type: 'video' };
+                    }
+
+                    card.addEventListener('click', () => {
+                        document.querySelectorAll('.quality-grid .quality-card').forEach(c => {
+                            c.classList.remove('selected');
+                            c.querySelector('i').style.color = 'transparent';
+                        });
+                        card.classList.add('selected');
+                        card.querySelector('i').style.color = 'var(--gold-primary)';
+                        selectedFormat = { id: v.format_id, type: 'video' };
+                    });
+                    vGrid.appendChild(card);
+                });
+            }
+
+            // Render Audio Options
+            const aGrid = document.getElementById('audio-options-grid');
+            aGrid.innerHTML = '';
+            if (data.audios && data.audios.length > 0) {
+                data.audios.forEach((a, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'quality-card';
+                    card.innerHTML = `<div><div class="q-name">${a.bitrate}</div><div class="q-type">MP3 Audio</div></div><i class="fa-solid fa-circle-check" style="color: transparent;"></i>`;
+                    
+                    card.addEventListener('click', () => {
+                        document.querySelectorAll('.quality-grid .quality-card').forEach(c => {
+                            c.classList.remove('selected');
+                            c.querySelector('i').style.color = 'transparent';
+                        });
+                        card.classList.add('selected');
+                        card.querySelector('i').style.color = 'var(--gold-primary)';
+                        selectedFormat = { id: a.format_id, type: 'audio' };
+                    });
+                    aGrid.appendChild(card);
+                });
+            }
+        }
+
+        // Trigger Download Execution
+        document.getElementById('download-trigger-btn').addEventListener('click', async () => {
+            if (!currentJobData || !selectedFormat.id) {
+                showToast('Please select a valid quality');
+                return;
+            }
+
+            showPanel('panel-downloading');
+
+            try {
+                const response = await fetch('/api/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: currentJobData.original_url,
+                        format_id: selectedFormat.id,
+                        type: selectedFormat.type
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Download failed to start');
+
+                const jobId = data.job_id;
+                const pollInterval = setInterval(async () => {
+                    const pRes = await fetch(`/api/progress/${jobId}`);
+                    const pData = await pRes.json();
+
+                    if (pData.status === 'downloading') {
+                        const prog = Math.round(pData.progress || 0);
+                        document.getElementById('progress-fill').style.width = prog + '%';
+                        document.getElementById('progress-percentage').innerText = prog + '%';
+                    } else if (pData.status === 'completed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('progress-fill').style.width = '100%';
+                        document.getElementById('progress-percentage').innerText = '100%';
+                        showToast('Download complete! Starting file download...');
+                        
+                        // Trigger file download
+                        window.location.href = `/api/file/${jobId}`;
+                        
+                        setTimeout(() => {
+                            showPanel('panel-input');
+                            document.getElementById('url-input').value = '';
+                        }, 2500);
+                    } else if (pData.status === 'error') {
+                        clearInterval(pollInterval);
+                        document.getElementById('error-message-text').innerText = pData.message || 'Download error';
+                        showPanel('panel-error');
+                    }
+                }, 1000);
+
+            } catch (err) {
+                document.getElementById('error-message-text').innerText = err.message;
+                showPanel('panel-error');
+            }
+        });
+
+        document.getElementById('retry-btn').addEventListener('click', () => {
+            showPanel('panel-input');
+            document.getElementById('url-input').value = '';
+        });
+    </script>
+</body>
+</html>
+"""
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
