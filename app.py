@@ -11,18 +11,17 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VELOX — Media Downloader</title>
+    <title>VELOX — Cinematic Media Downloader</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-obsidian: #07080c;
-            --card-glass: rgba(14, 16, 23, 0.8);
+            --bg-obsidian: #050608;
+            --card-glass: rgba(12, 14, 20, 0.85);
             --gold-accent: #f1c40f;
-            --gold-bright: #f39c12;
-            --gold-gradient: linear-gradient(135deg, #f39c12, #f1c40f, #d4af37);
+            --gold-bright: #ffea79;
+            --gold-gradient: linear-gradient(135deg, #f39c12, #f1c40f, #ffe600);
             --text-main: #f4f5f7;
             --text-muted: #8e92a4;
-            --border-glass: rgba(241, 196, 15, 0.2);
         }
 
         * {
@@ -30,7 +29,7 @@ HTML_TEMPLATE = """
             margin: 0;
             padding: 0;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         body {
@@ -41,175 +40,229 @@ HTML_TEMPLATE = """
             justify-content: center;
             align-items: center;
             padding: 20px;
-            overflow-x: hidden;
+            overflow: hidden;
             background-image: 
-                radial-gradient(circle at 50% -20%, rgba(241, 196, 15, 0.12), transparent 60%),
-                radial-gradient(circle at 50% 120%, rgba(243, 156, 18, 0.05), transparent 50%);
+                radial-gradient(circle at 50% -20%, rgba(241, 196, 15, 0.15), transparent 60%),
+                radial-gradient(circle at 50% 120%, rgba(243, 156, 18, 0.08), transparent 50%);
         }
 
-        /* Butter-smooth entry animation */
-        @keyframes containerEntrance {
-            0% {
-                opacity: 0;
-                transform: translateY(40px) scale(0.96);
-                filter: blur(10px);
-            }
-            100% {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-                filter: blur(0);
-            }
+        /* Cinematic Intro Overlay */
+        #intro-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #030406;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            animation: fadeOutIntro 0.5s ease-in-out 1.5s forwards;
         }
 
-        /* Live butter-smooth breathing gold glow animation */
-        @keyframes butterGoldGlow {
+        @keyframes fadeOutIntro {
+            0% { opacity: 1; visibility: visible; }
+            100% { opacity: 0; visibility: hidden; }
+        }
+
+        .intro-logo {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: var(--gold-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            animation: introZoom 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .intro-sub {
+            color: var(--gold-accent);
+            font-size: 0.9rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-top: 10px;
+            opacity: 0.8;
+            animation: introZoom 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes introZoom {
+            0% { transform: scale(0.9); opacity: 0; filter: blur(10px); }
+            50% { transform: scale(1); opacity: 1; filter: blur(0); }
+            100% { transform: scale(1.05); opacity: 1; filter: blur(0); }
+        }
+
+        /* After Effects Saber Neon Glow Effect */
+        @keyframes saberGlow {
             0% {
-                border-color: rgba(241, 196, 15, 0.4);
-                box-shadow: 0 0 15px rgba(241, 196, 15, 0.15), inset 0 0 10px rgba(241, 196, 15, 0.05);
+                border-color: rgba(241, 196, 15, 0.6);
+                box-shadow: 0 0 10px rgba(241, 196, 15, 0.3), 
+                            0 0 25px rgba(243, 156, 18, 0.3), 
+                            inset 0 0 12px rgba(241, 196, 15, 0.2);
             }
             50% {
-                border-color: rgba(243, 156, 18, 0.9);
-                box-shadow: 0 0 35px rgba(241, 196, 15, 0.45), inset 0 0 15px rgba(243, 156, 18, 0.2);
+                border-color: rgba(255, 234, 121, 1);
+                box-shadow: 0 0 20px rgba(241, 196, 15, 0.7), 
+                            0 0 45px rgba(243, 156, 18, 0.8), 
+                            0 0 70px rgba(241, 196, 15, 0.5), 
+                            inset 0 0 22px rgba(255, 234, 121, 0.5);
             }
             100% {
-                border-color: rgba(241, 196, 15, 0.4);
-                box-shadow: 0 0 15px rgba(241, 196, 15, 0.15), inset 0 0 10px rgba(241, 196, 15, 0.05);
-            }
-        }
-
-        @keyframes cardReveal {
-            from {
-                opacity: 0;
-                transform: translateY(15px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+                border-color: rgba(241, 196, 15, 0.6);
+                box-shadow: 0 0 10px rgba(241, 196, 15, 0.3), 
+                            0 0 25px rgba(243, 156, 18, 0.3), 
+                            inset 0 0 12px rgba(241, 196, 15, 0.2);
             }
         }
 
         .container {
             width: 100%;
-            max-width: 600px;
+            max-width: 620px;
             background: var(--card-glass);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border: 1px solid var(--border-glass);
-            border-radius: 28px;
-            padding: 45px 35px;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
-            animation: containerEntrance 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 2px solid rgba(241, 196, 15, 0.5);
+            border-radius: 30px;
+            padding: 40px 30px;
+            animation: saberGlow 3s infinite ease-in-out, containerEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 1.5s;
+            opacity: 0;
+        }
+
+        @keyframes containerEntrance {
+            from { opacity: 0; transform: translateY(30px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .header {
             text-align: center;
-            margin-bottom: 35px;
+            margin-bottom: 30px;
         }
 
         .logo-title {
-            font-size: 2.8rem;
+            font-size: 2.6rem;
             font-weight: 700;
             background: var(--gold-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: 3px;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             text-transform: uppercase;
         }
 
         .subtitle {
             color: var(--text-muted);
-            font-size: 0.95rem;
-            font-weight: 400;
+            font-size: 0.9rem;
             letter-spacing: 0.5px;
         }
 
         .input-group {
             position: relative;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .url-input {
             width: 100%;
-            padding: 20px 22px;
-            background: rgba(7, 8, 12, 0.85);
-            border: 1.5px solid rgba(241, 196, 15, 0.25);
+            padding: 18px 20px;
+            background: rgba(5, 6, 8, 0.9);
+            border: 1.5px solid rgba(241, 196, 15, 0.3);
             border-radius: 16px;
             color: #fff;
             font-size: 1rem;
             outline: none;
-            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
-        .url-input:focus, .url-input:hover {
-            animation: butterGoldGlow 3s infinite ease-in-out;
+        .url-input:focus {
+            border-color: var(--gold-bright);
+            box-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
         }
 
         .btn-submit {
             width: 100%;
-            padding: 18px;
+            padding: 16px;
             background: var(--gold-gradient);
             border: none;
             border-radius: 16px;
-            color: #07080c;
+            color: #050608;
             font-weight: 700;
             font-size: 1.05rem;
             cursor: pointer;
-            letter-spacing: 0.8px;
-            box-shadow: 0 10px 30px rgba(241, 196, 15, 0.25);
+            box-shadow: 0 8px 25px rgba(241, 196, 15, 0.3);
         }
 
         .btn-submit:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 40px rgba(241, 196, 15, 0.45);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(241, 196, 15, 0.5);
         }
 
-        .btn-submit:active {
-            transform: translateY(1px);
-        }
-
+        /* Result & Quality Selector Area */
         #result-area {
             margin-top: 25px;
             display: none;
-            animation: cardReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 5px;
         }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(241, 196, 15, 0.3); border-radius: 10px; }
 
         .media-card {
             background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(241, 196, 15, 0.2);
+            border: 1px solid rgba(241, 196, 15, 0.25);
             border-radius: 18px;
-            padding: 22px;
-            text-align: center;
+            padding: 20px;
         }
 
         .media-title {
-            font-size: 1.05rem;
-            margin-bottom: 18px;
+            font-size: 1rem;
+            margin-bottom: 15px;
             color: #fff;
-            line-height: 1.5;
+            font-weight: 600;
+            line-height: 1.4;
         }
 
-        .download-link {
-            display: inline-block;
-            padding: 14px 28px;
-            background: rgba(241, 196, 15, 0.12);
-            border: 1px solid var(--gold-accent);
+        .quality-section-title {
+            font-size: 0.85rem;
             color: var(--gold-accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 15px 0 8px 0;
+            font-weight: 700;
+        }
+
+        .quality-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .quality-btn {
+            padding: 12px 15px;
+            background: rgba(241, 196, 15, 0.08);
+            border: 1px solid rgba(241, 196, 15, 0.3);
+            color: var(--text-main);
             border-radius: 12px;
             text-decoration: none;
             font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            display: block;
         }
 
-        .download-link:hover {
+        .quality-btn:hover {
             background: var(--gold-gradient);
-            color: #07080c;
+            color: #050608;
+            border-color: transparent;
             box-shadow: 0 5px 20px rgba(241, 196, 15, 0.4);
         }
 
         .spinner {
             display: none;
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             border: 3px solid rgba(241, 196, 15, 0.2);
             border-top: 3px solid var(--gold-accent);
             border-radius: 50%;
@@ -225,17 +278,23 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
+    <!-- Cinematic Intro Screen -->
+    <div id="intro-screen">
+        <h1 class="intro-logo">VELOX</h1>
+        <p class="intro-sub">Engineered by Jazan</p>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1 class="logo-title">VELOX</h1>
-            <p class="subtitle">Next-Generation High-Speed Media Downloader</p>
+            <p class="subtitle">Ultimate Multi-Quality Media Downloader</p>
         </div>
 
         <div class="input-group">
-            <input type="text" id="urlInput" class="url-input" placeholder="Paste media link here..." autocomplete="off">
+            <input type="text" id="urlInput" class="url-input" placeholder="Paste YouTube or Instagram link..." autocomplete="off">
         </div>
 
-        <button id="fetchBtn" class="btn-submit" onclick="fetchMedia()">Get Download Link</button>
+        <button id="fetchBtn" class="btn-submit" onclick="fetchMediaFormats()">Scan Qualities</button>
 
         <div id="spinner" class="spinner"></div>
 
@@ -243,7 +302,7 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        async function fetchMedia() {
+        async function fetchMediaFormats() {
             const urlInput = document.getElementById('urlInput').value.trim();
             const resultArea = document.getElementById('result-area');
             const spinner = document.getElementById('spinner');
@@ -270,12 +329,31 @@ HTML_TEMPLATE = """
                 fetchBtn.disabled = false;
 
                 if (data.error) {
-                    resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c;">${data.error}</p></div>`;
+                    resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c; text-align: center;">${data.error}</p></div>`;
                 } else {
+                    let videoButtons = '';
+                    if (data.formats.video.length > 0) {
+                        videoButtons = `<div class="quality-section-title">Video Qualities</div><div class="quality-grid">`;
+                        data.formats.video.forEach(f => {
+                            videoButtons += `<a href="${f.url}" target="_blank" class="quality-btn" download>${f.resolution}</a>`;
+                        });
+                        videoButtons += `</div>`;
+                    }
+
+                    let audioButtons = '';
+                    if (data.formats.audio.length > 0) {
+                        audioButtons = `<div class="quality-section-title">Audio Streams</div><div class="quality-grid">`;
+                        data.formats.audio.forEach(f => {
+                            audioButtons += `<a href="${f.url}" target="_blank" class="quality-btn" download>${f.quality}</a>`;
+                        });
+                        audioButtons += `</div>`;
+                    }
+
                     resultArea.innerHTML = `
                         <div class="media-card">
                             <h3 class="media-title">${data.title}</h3>
-                            <a href="${data.download_url}" target="_blank" class="download-link" download>Download Media</a>
+                            ${videoButtons}
+                            ${audioButtons}
                         </div>
                     `;
                 }
@@ -284,7 +362,7 @@ HTML_TEMPLATE = """
                 spinner.style.display = 'none';
                 fetchBtn.style.opacity = '1';
                 fetchBtn.disabled = false;
-                resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c;">Extraction failed. Check link or try again.</p></div>`;
+                resultArea.innerHTML = `<div class="media-card" style="border-color: #e74c3c;"><p style="color: #e74c3c; text-align: center;">Scan failed. Check link or try again.</p></div>`;
                 resultArea.style.display = 'block';
             }
         }
@@ -306,20 +384,69 @@ def extract_media():
         return jsonify({'error': 'No URL provided'}), 400
 
     ydl_opts = {
-        'format': 'best',
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title', 'Media File')
-            download_url = info.get('url')
+            raw_formats = info.get('formats', [])
             
+            video_qualities = []
+            audio_qualities = []
+            seen_res = set()
+            seen_audio = set()
+
+            for f in raw_formats:
+                f_url = f.get('url')
+                if not f_url:
+                    continue
+                
+                # Filter Video Formats (4K, 1080p, 720p, 480p, 360p)
+                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                    height = f.get('height')
+                    if height and height >= 360:
+                        if height >= 2160: res_label = "4K Ultra HD"
+                        elif height >= 1440: res_label = "1440p (2K)"
+                        elif height >= 1080: res_label = "1080p Full HD"
+                        elif height >= 720: res_label = "720p HD"
+                        elif height >= 480: res_label = "480p"
+                        else: res_label = "360p"
+                        
+                        if res_label not in seen_res:
+                            seen_res.add(res_label)
+                            video_qualities.append({'resolution': res_label, 'url': f_url})
+
+                # Filter Audio Streams (320kbps, 128kbps, etc.)
+                elif f.get('vcodec') == 'none' and f.get('acodec') != 'none':
+                    abr = f.get('abr', 0)
+                    if abr:
+                        audio_label = f"{int(abr)} kbps Audio"
+                        if audio_label not in seen_audio:
+                            seen_audio.add(audio_label)
+                            audio_qualities.append({'quality': audio_label, 'url': f_url})
+
+            # Sort video highest to lowest resolution approximation
+            video_qualities = sorted(video_qualities, key=lambda x: ('4K' in x['resolution'], '1440p' in x['resolution'], '1080p' in x['resolution'], '720p' in x['resolution']), reverse=True)
+
             return jsonify({
                 'title': title,
-                'download_url': download_url
+                'formats': {
+                    'video': video_qualities[:6],  # Top choices
+                    'audio': audio_qualities[:4]
+                }
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -327,4 +454,3 @@ def extract_media():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-    
