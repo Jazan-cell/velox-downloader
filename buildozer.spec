@@ -1,6 +1,6 @@
 [app]
 
-title = Velox Downloader
+title = VELOX Downloader
 package.name = veloxdownloader
 package.domain = com.jazan.velox
 
@@ -11,13 +11,18 @@ version = 1.0.0
 
 requirements = python3,kivy,pyjnius
 
-android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
+android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
 android.accept_sdk_license = True
 
+android.api = 36
+android.ndk = 29
+android.minapi = 23
+
+p4a.branch = develop
+
 orientation = portrait
 fullscreen = 1
-
 
 [buildozer]
 
