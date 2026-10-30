@@ -13,18 +13,63 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fix Safe Directory & Permissions
+      - name: Fix Permissions
         run: |
           git config --global --add safe.directory "*"
           mkdir -p .buildozer
 
+      - name: Accept Android SDK Licenses
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("buildozer.spec")
+
+          if not path.exists():
+              raise SystemExit("ERROR: buildozer.spec not found!")
+
+          lines = path.read_text().splitlines()
+
+          found = False
+          in_app = False
+
+          for i, line in enumerate(lines):
+              if line.strip().lower() == "[app]":
+                  in_app = True
+                  continue
+
+              if line.strip().startswith("[") and line.strip().endswith("]"):
+                  in_app = False
+
+              if in_app and line.lstrip("# ").startswith("android.accept_sdk_license"):
+                  lines[i] = "android.accept_sdk_license = True"
+                  found = True
+                  break
+
+          if not found:
+              raise SystemExit(
+                  "ERROR: android.accept_sdk_license setting not found in [app]"
+              )
+
+          path.write_text("\n".join(lines) + "\n")
+          print("Android SDK licenses enabled!")
+          PY
+
+      - name: Clean Incomplete Android Build Tools
+        run: |
+          rm -rf "$HOME/.buildozer/android/platform/android-sdk/build-tools"
+
       - name: Build with Buildozer
         env:
           BUILDOZER_WARN_ON_ROOT: "0"
-        run: buildozer -v android debug
+          PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: "0"
+        run: |
+          buildozer -v android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: Velox-Downloader-APK
           path: bin/*.apk
+          if-no-files-found: error
