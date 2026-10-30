@@ -13,15 +13,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure Non-Root Environment & Git
-        run: |
-          useradd -m -s /bin/bash builder || true
-          chown -R builder:builder $GITHUB_WORKSPACE
-          git config --global --add safe.directory "*"
+      - name: Fix Git Safe Directory
+        run: git config --global --add safe.directory "*"
 
       - name: Build with Buildozer
-        run: |
-          su builder -c "cd $GITHUB_WORKSPACE && yes | buildozer -v android debug"
+        env:
+          BUILDOZER_WARN_ON_ROOT: "0"
+        run: yes | buildozer -v android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
